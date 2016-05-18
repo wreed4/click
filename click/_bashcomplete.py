@@ -2,7 +2,8 @@ import os
 import re
 from .utils import echo
 from .parser import split_arg_string
-from .core import MultiCommand, Option
+from .core import MultiCommand, Option, Argument
+from .types import Choice
 
 
 COMPLETION_SCRIPT = '''
@@ -51,8 +52,20 @@ def get_choices(cli, prog_name, args, incomplete):
                 continue
             choices.extend(param.opts)
             choices.extend(param.secondary_opts)
-    elif isinstance(ctx.command, MultiCommand):
-        choices.extend(ctx.command.list_commands(ctx))
+    else:
+        required_params = [p for p in ctx.command.params if p.required]
+        for param in required_params:
+            if ctx.params[param.name] in args: # already provided this parameter
+                required_params.remove(param)
+                continue
+            if isinstance(param, Option):
+                choices.extend(param.opts)
+                choices.extend(param.secondary_opts)
+            elif isinstance(param, Argument) and isinstance(param.type, Choice):
+                choices.extend(param.type.choices)
+
+        if not required_params and isinstance(ctx.command, MultiCommand): # only if we have all the required params
+            choices.extend(ctx.command.list_commands(ctx))
 
     for item in choices:
         if item.startswith(incomplete):
